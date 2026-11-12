@@ -1,0 +1,23 @@
+{
+  "name": "@hno/api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js",
+    "test:db": "node --test test-integration/*.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mariadb": "^3.4.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.0.0"
+  }
+}

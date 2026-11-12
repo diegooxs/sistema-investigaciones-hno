@@ -1,0 +1,31 @@
+{
+  "name": "sistema-investigaciones-hno",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "db:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/mariadb-local.ps1 install",
+    "db:up": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/mariadb-local.ps1 start",
+    "db:down": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/mariadb-local.ps1 stop",
+    "db:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/mariadb-local.ps1 status",
+    "db:console": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/mariadb-local.ps1 console",
+    "db:tables": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/mariadb-local.ps1 tables",
+    "db:backup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/backup-mariadb.ps1 backup",
+    "db:backups": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/backup-mariadb.ps1 list",
+    "db:restore": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/backup-mariadb.ps1 restore",
+    "db:docker:up": "docker compose up -d --wait mariadb",
+    "db:docker:down": "docker compose down",
+    "dev:web": "pnpm --filter @hno/web dev",
+    "dev:api": "pnpm --filter @hno/api dev",
+    "build": "pnpm --filter @hno/web build",
+    "test": "pnpm --filter @hno/api test",
+    "test:db": "pnpm --filter @hno/api test:db",
+    "check": "pnpm test && pnpm build",
+    "release:check": "pnpm check && pnpm test:db",
+    "prod:prepare": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/produccion-local.ps1 prepare",
+    "prod:up": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/produccion-local.ps1 start",
+    "prod:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/produccion-local.ps1 status",
+    "prod:down": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/produccion-local.ps1 stop"
+  }
+}

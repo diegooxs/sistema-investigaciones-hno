@@ -1,0 +1,8 @@
+flowchart LR
+  U[Usuarios institucionales] --> W[Aplicación web React]
+  W -->|HTTPS JSON| A[API REST Express]
+  A --> S[Servicios y reglas de negocio]
+  S --> M[(MariaDB)]
+  S --> D[(Almacenamiento documental institucional)]
+  S --> N[Notificaciones]
+  A --> L[Registro de auditoría]
