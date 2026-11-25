@@ -2484,6 +2484,14 @@ function Dashboard({ session, onLogout }) {
           if (window.innerWidth <= 760) setCollapsed(true);
         }}
       />
+      {!collapsed && (
+        <button
+          className="mobile-backdrop"
+          type="button"
+          aria-label="Cerrar menú"
+          onClick={() => setCollapsed(true)}
+        />
+      )}
       <main>
         <header className="topbar">
           <div className="heading-group">
