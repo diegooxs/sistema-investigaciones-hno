@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001/api/v1";
 const navigation = [
@@ -15,6 +15,15 @@ const navigation = [
   { key: "publicaciones", label: "Publicaciones", icon: "◫" },
   { key: "usuarios", label: "Usuarios y permisos", icon: "♙", adminOnly: true },
 ];
+const viewPaths = Object.freeze({
+  panel: "/panel",
+  investigaciones: "/investigaciones",
+  revisiones: "/revisiones",
+  evaluaciones: "/evaluaciones",
+  publicaciones: "/publicaciones",
+  usuarios: "/usuarios",
+});
+const pathViews = Object.fromEntries(Object.entries(viewPaths).map(([view, path]) => [path, view]));
 const documentTypes = [
   ["ANEXO_A", "Anexo A — Ficha de registro"],
   ["ANEXO_E", "Anexo E — Protocolo"],
@@ -2509,7 +2518,9 @@ function FutureModule({ title }) {
 
 function Dashboard({ session, onLogout }) {
   const [collapsed, setCollapsed] = useState(() => window.innerWidth <= 760);
-  const [currentView, setCurrentView] = useState("panel");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const currentView = pathViews[location.pathname] ?? "panel";
   const [investigations, setInvestigations] = useState([]);
   const [message, setMessage] = useState("");
   const user = session?.user;
@@ -2545,6 +2556,12 @@ function Dashboard({ session, onLogout }) {
     return () => clearTimeout(timeout);
   }, [message]);
   if (!user) return <Navigate to="/acceso" replace />;
+  if (currentView === "usuarios" && !user.roles.includes("ADMINISTRADOR")) {
+    return <Navigate to="/panel" replace />;
+  }
+  if (currentView === "investigaciones" && !user.roles.some((role) => ["ADMINISTRADOR", "ADMIN_INVESTIGADOR", "INVESTIGADOR"].includes(role))) {
+    return <Navigate to="/panel" replace />;
+  }
   const titles = {
     panel: ["Panel general", "Administración de investigaciones científicas"],
     investigaciones: ["Investigaciones", "Registro y gestión documental"],
@@ -2565,7 +2582,7 @@ function Dashboard({ session, onLogout }) {
         currentView={currentView}
         roles={user.roles}
         onNavigate={(view) => {
-          setCurrentView(view);
+          navigate(viewPaths[view]);
           if (window.innerWidth <= 760) setCollapsed(true);
         }}
       />
@@ -2603,7 +2620,7 @@ function Dashboard({ session, onLogout }) {
             <NotificationBell
               session={session}
               setMessage={setMessage}
-              onNavigate={setCurrentView}
+              onNavigate={(view) => navigate(viewPaths[view])}
             />
             <div className="user-text">
               <strong>{user.name}</strong>
@@ -2627,13 +2644,15 @@ function Dashboard({ session, onLogout }) {
             <Panel
               investigations={investigations}
               onOpenResearch={() =>
-                setCurrentView(
+                navigate(
+                  viewPaths[
                   user.roles.includes("COMITE") &&
                     !user.roles.some((role) =>
                       ["ADMINISTRADOR", "ADMIN_INVESTIGADOR", "INVESTIGADOR"].includes(role),
                     )
                     ? "revisiones"
-                    : "investigaciones",
+                    : "investigaciones"
+                  ],
                 )
               }
             />
@@ -2712,7 +2731,7 @@ function Login({ onLogin }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       onLogin(data);
-      navigate("/");
+      navigate("/panel");
     } catch (error) {
       setError(error.message ?? "No fue posible iniciar sesión");
     } finally {
@@ -2804,11 +2823,15 @@ export default function App() {
   }
   return (
     <Routes>
-      <Route
-        path="/"
-        element={<Dashboard session={session} onLogout={logout} />}
-      />
+      <Route path="/" element={<Navigate to={session ? "/panel" : "/acceso"} replace />} />
+      <Route path="/panel" element={<Dashboard session={session} onLogout={logout} />} />
+      <Route path="/investigaciones" element={<Dashboard session={session} onLogout={logout} />} />
+      <Route path="/revisiones" element={<Dashboard session={session} onLogout={logout} />} />
+      <Route path="/evaluaciones" element={<Dashboard session={session} onLogout={logout} />} />
+      <Route path="/publicaciones" element={<Dashboard session={session} onLogout={logout} />} />
+      <Route path="/usuarios" element={<Dashboard session={session} onLogout={logout} />} />
       <Route path="/acceso" element={<Login onLogin={login} />} />
+      <Route path="*" element={<Navigate to={session ? "/panel" : "/acceso"} replace />} />
     </Routes>
   );
 }
