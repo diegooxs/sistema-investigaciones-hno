@@ -95,6 +95,14 @@ export function createStore() {
       for (const memberId of unique) { const member = users.find((item) => item.id === memberId); if (!member?.active || !member.roles.includes('COMITE')) fail('Todos los integrantes deben ser usuarios activos con rol de comité'); }
       committee.memberIds = unique; return { ...committee, memberIds: [...unique] };
     },
+    changeUserPassword(id, actorId, currentPassword, newPassword) {
+      const actor = users.find((user) => user.id === Number(actorId));
+      if (!actor || !bcrypt.compareSync(String(currentPassword), actor.passwordHash)) fail('La contraseña actual no es correcta', 401);
+      const target = users.find((user) => user.id === Number(id));
+      if (!target) fail('Usuario no encontrado', 404);
+      target.passwordHash = bcrypt.hashSync(String(newPassword), 10);
+      return publicUser(target);
+    },
     listInvestigations(user) { return investigations.filter((item) => isManager(user) || item.investigatorId === user.id).map(researchWithOwner); },
     findInvestigation(id) { return investigations.find((item) => item.id === Number(id)); },
     getInvestigation(id, user) { const item = this.findInvestigation(id); if (!item) fail('Investigación no encontrada', 404); if (!canManageResearch(item, user) && !canReviewResearch(item, user)) fail('No tienes permiso para consultar esta investigación', 403); return researchWithOwner(item); },

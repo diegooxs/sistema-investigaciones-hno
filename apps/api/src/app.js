@@ -132,6 +132,13 @@ export function createApp({ store = createStore() } = {}) {
     if (changes.password !== undefined && String(changes.password).length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
     res.json({ data: await store.updateUser(req.params.id, changes) });
   }));
+  app.patch('/api/v1/users/:id/password', secured, administrator, asyncRoute(async (req, res) => {
+    const { currentPassword, newPassword, confirmPassword } = req.body ?? {};
+    if (!currentPassword || !newPassword || !confirmPassword) return res.status(400).json({ error: 'Captura la contraseña actual, la nueva y su confirmación' });
+    if (String(newPassword).length < 8) return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 8 caracteres' });
+    if (newPassword !== confirmPassword) return res.status(400).json({ error: 'La confirmación no coincide con la nueva contraseña' });
+    res.json({ data: await store.changeUserPassword(req.params.id, req.user.id, currentPassword, newPassword) });
+  }));
   app.get('/api/v1/committees', secured, asyncRoute(async (_req, res) => res.json({ data: await store.listCommittees() })));
   app.post('/api/v1/committees', secured, administrator, asyncRoute(async (req, res) => {
     const { name, type, memberIds } = req.body ?? {};

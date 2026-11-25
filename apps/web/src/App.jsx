@@ -110,6 +110,50 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function PasswordInput({ value, onChange, placeholder, autoComplete, required = false, minLength, name, id }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <span className="password-input-wrap">
+      <input
+        id={id}
+        name={name}
+        type={visible ? "text" : "password"}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        required={required}
+        minLength={minLength}
+      />
+      <button
+        type="button"
+        className="password-toggle"
+        onClick={() => setVisible((current) => !current)}
+        aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
+        title={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
+      >
+        {visible ? "Ocultar" : "Mostrar"}
+      </button>
+    </span>
+  );
+}
+
+function ConfirmDialog({ title, message, onConfirm, onCancel }) {
+  return (
+    <div className="system-dialog-backdrop" role="presentation">
+      <section className="system-dialog" role="dialog" aria-modal="true" aria-labelledby="system-dialog-title">
+        <p className="section-label">Confirmación del sistema</p>
+        <h3 id="system-dialog-title">{title}</h3>
+        <p>{message}</p>
+        <div className="system-dialog-actions">
+          <button type="button" className="outline-button" onClick={onCancel}>Cancelar</button>
+          <button type="button" className="primary-button" onClick={onConfirm}>Confirmar</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 async function api(path, session, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
@@ -917,8 +961,9 @@ function UserManagement({ session, setMessage }) {
   const [roles, setRoles] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [newUserPassword, setNewUserPassword] = useState("");
   const [resetUserId, setResetUserId] = useState(null);
-  const [resetPassword, setResetPassword] = useState("");
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
 
   async function loadUsers() {
     const [userResult, roleResult] = await Promise.all([
@@ -948,6 +993,7 @@ function UserManagement({ session, setMessage }) {
         }),
       });
       formElement.reset();
+      setNewUserPassword("");
       setShowForm(false);
       await loadUsers();
       setMessage("Usuario registrado correctamente.");
@@ -971,14 +1017,20 @@ function UserManagement({ session, setMessage }) {
   }
   async function submitPassword(event, userId) {
     event.preventDefault();
-    if (resetPassword.length < 8)
+    if (passwordForm.newPassword.length < 8)
       return setMessage("La contraseña debe tener al menos 8 caracteres.");
-    await updateUser(
-      userId,
-      { password: resetPassword },
-      "Contraseña restablecida correctamente.",
-    );
-    setResetPassword("");
+    if (passwordForm.newPassword !== passwordForm.confirmPassword)
+      return setMessage("La confirmación no coincide con la nueva contraseña.");
+    try {
+      await api(`/users/${userId}/password`, session, {
+        method: "PATCH",
+        body: JSON.stringify(passwordForm),
+      });
+      setMessage("Contraseña actualizada correctamente.");
+    } catch (error) {
+      return setMessage(error.message);
+    }
+    setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
     setResetUserId(null);
   }
   return (
@@ -1028,11 +1080,13 @@ function UserManagement({ session, setMessage }) {
           </label>
           <label>
             Contraseña temporal
-            <input
+            <PasswordInput
               name="password"
-              type="password"
+              value={newUserPassword}
+              onChange={(event) => setNewUserPassword(event.target.value)}
               required
               minLength="8"
+              autoComplete="new-password"
               placeholder="Mínimo 8 caracteres"
             />
           </label>
@@ -1139,7 +1193,7 @@ function UserManagement({ session, setMessage }) {
                             setResetUserId(
                               resetUserId === user.id ? null : user.id,
                             );
-                            setResetPassword("");
+                            setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
                           }}
                         >
                           Contraseña
@@ -1154,16 +1208,35 @@ function UserManagement({ session, setMessage }) {
                           onSubmit={(event) => submitPassword(event, user.id)}
                         >
                           <label>
+                            Tu contraseña actual
+                            <PasswordInput
+                              value={passwordForm.currentPassword}
+                              onChange={(event) => setPasswordForm((current) => ({ ...current, currentPassword: event.target.value }))}
+                              required
+                              autoComplete="current-password"
+                              placeholder="Contraseña actual"
+                            />
+                          </label>
+                          <label>
                             Nueva contraseña para {user.name}
-                            <input
-                              type="password"
-                              value={resetPassword}
-                              onChange={(event) =>
-                                setResetPassword(event.target.value)
-                              }
+                            <PasswordInput
+                              value={passwordForm.newPassword}
+                              onChange={(event) => setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))}
                               required
                               minLength="8"
+                              autoComplete="new-password"
                               placeholder="Mínimo 8 caracteres"
+                            />
+                          </label>
+                          <label>
+                            Confirmar nueva contraseña
+                            <PasswordInput
+                              value={passwordForm.confirmPassword}
+                              onChange={(event) => setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))}
+                              required
+                              minLength="8"
+                              autoComplete="new-password"
+                              placeholder="Repite la nueva contraseña"
                             />
                           </label>
                           <button className="primary-button compact">
@@ -1643,6 +1716,7 @@ function EvaluationWorkspace({
   const [scores, setScores] = useState({});
   const [feedbackResearch, setFeedbackResearch] = useState("");
   const [feedback, setFeedback] = useState([]);
+  const [confirmation, setConfirmation] = useState(null);
 
   async function load() {
     const [roundResult, rubricResult, committeeResult] = await Promise.all([
@@ -1697,34 +1771,48 @@ function EvaluationWorkspace({
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    if (
-      !window.confirm(
-        "¿Guardar esta rúbrica? Después de utilizarla en una evaluación, se conservará como una versión histórica.",
-      )
-    ) {
-      return;
-    }
-    try {
-      await api("/rubrics", session, {
-        method: "POST",
-        body: JSON.stringify({
-          committeeId: Number(form.get("committeeId")),
-          name: form.get("name"),
-          criteria,
-        }),
-      });
-      setCriteria([
-        { description: "", weight: 100, maximumScore: 10 },
-      ]);
-      setRubricCommitteeId("");
-      setRubricPreset("");
-      setRubricName("");
-      formElement.reset();
-      await load();
-      setMessage("Rúbrica guardada y activada para el comité.");
-    } catch (error) {
-      setMessage(error.message);
-    }
+    const payload = { committeeId: Number(form.get("committeeId")), name: form.get("name"), criteria };
+    setConfirmation({
+      title: "Guardar rúbrica",
+      message: "La rúbrica quedará activa para el comité seleccionado. Las versiones utilizadas conservarán su historial.",
+      action: async () => {
+        try {
+          await api("/rubrics", session, { method: "POST", body: JSON.stringify(payload) });
+          setCriteria([{ description: "", weight: 100, maximumScore: 10 }]);
+          setRubricCommitteeId("");
+          setRubricPreset("");
+          setRubricName("");
+          formElement.reset();
+          await load();
+          setMessage("Rúbrica guardada y activada para el comité.");
+        } catch (error) {
+          setMessage(error.message);
+        }
+      },
+    });
+  }
+  async function confirmEvaluation(event) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const payload = {
+      rubricId: Number(selectedRubric),
+      scores: rubric.criteria.map((item) => ({ criterionId: item.id, score: Number(scores[item.id]) })),
+      recommendation: form.get("recommendation"),
+      generalObservation: form.get("generalObservation"),
+    };
+    setConfirmation({
+      title: "Registrar evaluación",
+      message: "La evaluación se registrará en la ronda y quedará disponible para el seguimiento institucional.",
+      action: async () => {
+        try {
+          await api(`/assignments/${selectedAssignment}/evaluation`, session, { method: "PUT", body: JSON.stringify(payload) });
+          await Promise.all([load(), refreshInvestigations()]);
+          setMessage("Evaluación registrada y calificación calculada.");
+        } catch (error) {
+          setMessage(error.message);
+        }
+      },
+    });
   }
   function applyRubricPreset(event) {
     const preset = availableRubricPresets.find(
@@ -1740,35 +1828,6 @@ function EvaluationWorkspace({
           maximumScore: item.maximumScore,
         })),
       );
-    }
-  }
-  async function submitEvaluation(event) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    if (
-      !window.confirm(
-        "¿Confirmar esta evaluación? Después de guardarla quedará registrada para la ronda y el comité.",
-      )
-    ) {
-      return;
-    }
-    try {
-      await api(`/assignments/${selectedAssignment}/evaluation`, session, {
-        method: "PUT",
-        body: JSON.stringify({
-          rubricId: Number(selectedRubric),
-          scores: rubric.criteria.map((item) => ({
-            criterionId: item.id,
-            score: Number(scores[item.id]),
-          })),
-          recommendation: form.get("recommendation"),
-          generalObservation: form.get("generalObservation"),
-        }),
-      });
-      await Promise.all([load(), refreshInvestigations()]);
-      setMessage("Evaluación registrada y calificación calculada.");
-    } catch (error) {
-      setMessage(error.message);
     }
   }
   async function loadFeedback(id) {
@@ -1979,7 +2038,7 @@ function EvaluationWorkspace({
         </form>
       )}
       {isReviewer && (
-        <form className="evaluation-form" onSubmit={submitEvaluation}>
+        <form className="evaluation-form" onSubmit={confirmEvaluation}>
           <div className="form-heading">
             <div>
               <p className="section-label">Paso 2 · Evaluación</p>
@@ -2166,6 +2225,18 @@ function EvaluationWorkspace({
             </div>
           )}
         </section>
+      )}
+      {confirmation && (
+        <ConfirmDialog
+          title={confirmation.title}
+          message={confirmation.message}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={async () => {
+            const action = confirmation.action;
+            setConfirmation(null);
+            await action();
+          }}
+        />
       )}
     </section>
   );
@@ -2388,6 +2459,8 @@ function PublicationWorkspace({ session, investigations, refreshInvestigations, 
   const [items, setItems] = useState([]);
   const [report, setReport] = useState(null);
   const [query, setQuery] = useState("");
+  const [preview, setPreview] = useState(null);
+  useEffect(() => () => { if (preview?.url) URL.revokeObjectURL(preview.url); }, [preview]);
   async function load(search = query) {
     setItems((await api(`/publications?query=${encodeURIComponent(search)}`, session)).data);
     if (isManager) setReport((await api("/reports/executive", session)).data);
@@ -2397,12 +2470,24 @@ function PublicationWorkspace({ session, investigations, refreshInvestigations, 
     try { await api(`/investigations/${id}/publish`, session, { method: "POST" }); await Promise.all([load(), refreshInvestigations()]); setMessage("La investigación quedó publicada para consulta institucional."); }
     catch (error) { setMessage(error.message); }
   }
+  async function openPreview(item) {
+    try {
+      const { blob } = await fetchDocumentBlob(`/publications/${item.id}/download`, session);
+      if (preview?.url) URL.revokeObjectURL(preview.url);
+      setPreview({ url: URL.createObjectURL(blob), name: item.document.originalName });
+    } catch (error) { setMessage(error.message); }
+  }
+  function closePreview() {
+    if (preview?.url) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  }
   return (
     <section className="publication-workspace">
       <div className="workspace-header"><div><p className="section-label">Difusión institucional</p><h2>Publicación, consulta y reporte</h2><p>Difunde únicamente la versión autorizada y consulta indicadores institucionales.</p></div><span className="sprint-chip">Información autorizada</span></div>
       {isManager && <div className="publish-queue"><h3>Investigaciones autorizadas</h3>{investigations.filter((item) => item.state === "APROBADA").length ? investigations.filter((item) => item.state === "APROBADA").map((item) => <div key={item.id}><span>#{item.id} — <strong>{item.title}</strong></span><button type="button" className="primary-button" onClick={() => publish(item.id)}>Publicar versión vigente</button></div>) : <p className="muted-message">No hay investigaciones pendientes de publicación.</p>}</div>}
       <form className="publication-search" onSubmit={(event) => { event.preventDefault(); load().catch((error) => setMessage(error.message)); }}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por título o resumen" /><button className="outline-button">Buscar</button></form>
-      <div className="publication-grid">{items.map((item) => <article key={item.id}><p className="section-label">Publicación #{item.id}</p><h3>{item.research.title}</h3><p>{item.research.summary || "Sin resumen registrado."}</p><span>{item.research.area} · {item.research.category}</span><small>{item.research.investigator.name} · {new Date(item.publishedAt).toLocaleDateString("es-MX")}</small><button type="button" className="outline-button" onClick={() => download(`/publications/${item.id}/download`, session, item.document.originalName).catch((error) => setMessage(error.message))}>Descargar PDF publicado</button></article>)}</div>
+      <div className="publication-grid">{items.map((item) => <article key={item.id}><p className="section-label">Publicación #{item.id}</p><h3>{item.research.title}</h3><p>{item.research.summary || "Sin resumen registrado."}</p><span>{item.research.area} · {item.research.category}</span><small>{item.research.investigator.name} · {new Date(item.publishedAt).toLocaleDateString("es-MX")}</small><div className="publication-actions"><button type="button" className="outline-button" onClick={() => openPreview(item)}>Ver PDF</button><button type="button" className="text-button" onClick={() => download(`/publications/${item.id}/download`, session, item.document.originalName).catch((error) => setMessage(error.message))}>Descargar</button></div></article>)}</div>
+      {preview && <div className="document-preview publication-preview" role="dialog" aria-label={`Vista previa de ${preview.name}`}><div className="document-preview-heading"><strong>{preview.name}</strong><button type="button" className="text-button" onClick={closePreview}>Cerrar visor</button></div><iframe title={`Vista previa de ${preview.name}`} src={preview.url} /></div>}
       {!items.length && <p className="muted-message">Todavía no existen publicaciones activas.</p>}
       {report && <section className="executive-report"><div className="panel-heading"><div><p className="section-label">Reporte ejecutivo</p><h3>Indicadores acumulados</h3></div><small>Generado {new Date(report.generatedAt).toLocaleString("es-MX")}</small></div><div className="report-grid"><div><strong>{report.totals.investigations}</strong><span>Investigaciones</span></div><div><strong>{report.totals.inReview}</strong><span>En revisión</span></div><div><strong>{report.totals.authorized}</strong><span>Autorizadas</span></div><div><strong>{report.totals.published}</strong><span>Publicadas</span></div></div><div className="report-breakdown"><div><h4>Por estado</h4>{report.byState.map((item) => <p key={item.label}><span>{researchStateLabels[item.label] ?? item.label}</span><b>{item.total}</b></p>)}</div><div><h4>Por área</h4>{report.byArea.map((item) => <p key={item.label}><span>{item.label}</span><b>{item.total}</b></p>)}</div></div></section>}
     </section>
@@ -2609,6 +2694,7 @@ function Login({ onLogin }) {
   const navigate = useNavigate();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [password, setPassword] = useState("");
   async function submit(event) {
     event.preventDefault();
     setLoading(true);
@@ -2673,9 +2759,10 @@ function Login({ onLogin }) {
           </label>
           <label>
             Contraseña
-            <input
+            <PasswordInput
               name="password"
-              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
               placeholder="Ingresa tu contraseña"
               required

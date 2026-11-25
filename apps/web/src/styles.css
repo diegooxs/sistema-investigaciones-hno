@@ -3435,3 +3435,99 @@ select:focus-visible {
     font-size: 0.63rem;
   }
 }
+
+/* Controles de seguridad y confirmaciones propias del sistema. */
+.password-input-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.password-input-wrap input {
+  width: 100%;
+  padding-right: 78px !important;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  min-height: 30px;
+  transform: translateY(-50%);
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--wine);
+  background: #f8eef2;
+  font-size: 0.66rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  background: #f0dce4;
+}
+
+.system-dialog-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(35, 17, 25, 0.48);
+}
+
+.system-dialog {
+  width: min(460px, 100%);
+  padding: 25px;
+  border: 1px solid #ead8df;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(43, 14, 29, 0.24);
+}
+
+.system-dialog h3 {
+  margin: 6px 0 8px;
+  color: var(--ink);
+  font-size: 1.2rem;
+}
+
+.system-dialog p:not(.section-label) {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.system-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.publication-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.publication-preview {
+  margin-top: 18px;
+}
+
+@media (max-width: 560px) {
+  .system-dialog-actions,
+  .publication-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .system-dialog-actions button,
+  .publication-actions button {
+    width: 100%;
+  }
+}

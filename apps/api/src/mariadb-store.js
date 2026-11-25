@@ -156,6 +156,14 @@ export function createMariaDbStore({ pool = createDatabasePool() } = {}) {
         await connection.rollback(); throw error;
       } finally { connection.release(); }
     },
+    async changeUserPassword(id, actorId, currentPassword, newPassword) {
+      const actor = await this.findUserById(actorId);
+      if (!actor || !bcrypt.compareSync(String(currentPassword), actor.passwordHash)) fail('La contraseña actual no es correcta', 401);
+      const target = await this.findUserById(id);
+      if (!target) fail('Usuario no encontrado', 404);
+      await pool.query('UPDATE usuarios SET password_hash = ? WHERE id = ?', [bcrypt.hashSync(String(newPassword), 10), Number(id)]);
+      return publicUser(await this.findUserById(id));
+    },
     async listCommittees() {
       const rows = await pool.query(`
         SELECT c.id, c.nombre AS name, c.tipo AS type, c.activo AS active,
