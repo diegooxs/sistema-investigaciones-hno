@@ -3524,6 +3524,72 @@ select:focus-visible {
   margin-top: 18px;
 }
 
+/* Accesos operativos compactos, inspirados en portales institucionales. */
+.dashboard-shortcuts {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.dashboard-shortcuts > .panel-heading {
+  margin-bottom: 5px;
+}
+
+.dashboard-shortcut {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 8px;
+  border: 0;
+  border-top: 1px solid #eee6e9;
+  color: var(--ink);
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.dashboard-shortcut:hover {
+  padding-left: 12px;
+  border-radius: 8px;
+  background: #fbf4f7;
+}
+
+.shortcut-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  color: #fff;
+  background: var(--wine);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.dashboard-shortcut strong,
+.dashboard-shortcut small {
+  display: block;
+}
+
+.dashboard-shortcut strong {
+  font-size: 0.78rem;
+}
+
+.dashboard-shortcut small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.dashboard-shortcut > b {
+  color: var(--wine);
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+
 @media (max-width: 560px) {
   .system-dialog-actions,
   .publication-actions {

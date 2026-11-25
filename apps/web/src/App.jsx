@@ -276,7 +276,7 @@ function Sidebar({
   );
 }
 
-function Panel({ investigations, onOpenResearch }) {
+function Panel({ investigations, onOpenResearch, onOpenReviews, onOpenPublications }) {
   const summary = [
     {
       label: "Investigaciones registradas",
@@ -358,15 +358,28 @@ function Panel({ investigations, onOpenResearch }) {
             </p>
           </div>
         </article>
-        <aside className="quick-panel">
-          <p className="section-label">Funciones disponibles</p>
-          <h2>Gestión de expedientes</h2>
-          <div className="scope-list">
-            <span>✓ Registro y actualización</span>
-            <span>✓ Descarga de plantillas</span>
-            <span>✓ Carga de anexos y PDF</span>
-            <span>✓ Historial de versiones</span>
+        <aside className="quick-panel dashboard-shortcuts">
+          <div className="panel-heading">
+            <div>
+              <p className="section-label">Accesos directos</p>
+              <h2>Continúa tu trabajo</h2>
+            </div>
           </div>
+          <button type="button" className="dashboard-shortcut" onClick={onOpenResearch}>
+            <span className="shortcut-icon">▤</span>
+            <span><strong>Gestionar expedientes</strong><small>Registrar, actualizar y consultar documentos</small></span>
+            <b aria-hidden="true">›</b>
+          </button>
+          <button type="button" className="dashboard-shortcut" onClick={onOpenReviews}>
+            <span className="shortcut-icon">✓</span>
+            <span><strong>Revisiones asignadas</strong><small>Consultar rondas y responsables</small></span>
+            <b aria-hidden="true">›</b>
+          </button>
+          <button type="button" className="dashboard-shortcut" onClick={onOpenPublications}>
+            <span className="shortcut-icon">◫</span>
+            <span><strong>Consulta institucional</strong><small>Ver investigaciones autorizadas</small></span>
+            <b aria-hidden="true">›</b>
+          </button>
         </aside>
       </section>
     </>
@@ -2657,6 +2670,8 @@ function Dashboard({ session, onLogout }) {
                   ],
                 )
               }
+              onOpenReviews={() => navigate(viewPaths.revisiones)}
+              onOpenPublications={() => navigate(viewPaths.publicaciones)}
             />
             <NotificationCenter session={session} setMessage={setMessage} />
           </>
