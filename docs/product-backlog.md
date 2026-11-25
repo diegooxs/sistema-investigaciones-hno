@@ -21,7 +21,7 @@
 | HU-17 | Configurar rúbricas y criterios | Alta | 8 | 5 |
 | HU-18 | Evaluar y registrar observaciones | Alta | 8 | 5 |
 | HU-19 | Atender correcciones y nuevas versiones | Alta | 8 | 5 |
-| HU-20 | Emitir votos y dictamen | Alta | 8 | 6 |
+| HU-20 | Registrar dictamen por comité y consolidar la decisión institucional | Alta | 8 | 6 |
 | HU-21 | Consultar historial de estados y notificaciones | Alta | 8 | 6 |
 | HU-22 | Autorizar una investigación | Alta | 5 | 6 |
 | HU-23 | Publicar una versión autorizada | Alta | 8 | 7 |

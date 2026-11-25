@@ -37,6 +37,8 @@ El servidor valida la configuración al iniciar. Si detecta claves predeterminad
 
 Los PDF, anexos, versiones, usuarios, investigaciones, evaluaciones, dictámenes, publicaciones y notificaciones se almacenan en MariaDB; por ello quedan incluidos en el volcado con opción `--hex-blob`. El manifiesto registra la suma SHA-256 para detectar corrupción.
 
+Las notificaciones se consultan mediante `GET /api/v1/notifications` y se marcan como leídas con `PATCH /api/v1/notifications/:id/read`. La interfaz muestra una campana global y actualiza la bandeja periódicamente; el servidor filtra siempre por el usuario autenticado.
+
 ## 6. Restauración
 
 1. Detener el acceso de usuarios.
@@ -47,18 +49,34 @@ Los PDF, anexos, versiones, usuarios, investigaciones, evaluaciones, dictámenes
 
 La restauración reemplaza la información actual. Nunca debe ejecutarse sin un respaldo previo y autorización del responsable institucional.
 
-## 7. Comprobaciones operativas
+## 7. Registro de solicitudes y comprobaciones operativas
 
 - `pnpm prod:status`: estado de API, interfaz y MariaDB.
-- `pnpm release:check`: pruebas, compilación e integración persistente.
+- `pnpm release:check`: 22 pruebas unitarias y de API, compilación e integración persistente.
 - `GET /api/health`: disponibilidad de API y almacenamiento.
 - `.runtime/processes`: bitácoras locales de la API y la interfaz.
 - `pnpm db:tables`: tablas disponibles en MariaDB.
+
+Durante el desarrollo, `pnpm dev:api` muestra cada solicitud al finalizarla sin imprimir cuerpos, contraseñas ni tokens. El formato es:
+
+```text
+[fecha y hora] ESTADO MÉTODO RUTA -> CÓDIGO (duración ms)
+```
+
+Por ejemplo, `POST /api/v1/auth/login -> 200` identifica un inicio de sesión exitoso y `GET /api/v1/investigations -> 401` indica una consulta sin autenticación válida. En la ejecución preparada con `pnpm prod:up`, estas líneas se guardan en `.runtime/processes/api.log`; pueden observarse con `Get-Content .runtime\processes\api.log -Wait`.
 
 ## 8. Secuencia de producción prevista
 
 El proxy HTTPS institucional recibe las solicitudes. Las rutas `/api` se envían a Express y el resto sirve la interfaz compilada. Express valida el token y el rol antes de acceder a MariaDB. La base de datos permanece en una red interna y no debe exponerse directamente a Internet. Los respaldos deben cifrarse y almacenarse fuera del servidor principal.
 
-## 9. Entrega institucional pendiente
+## 9. Despliegue en nube con MariaDB
+
+Para una demostración escolar se recomienda separar los servicios: interfaz estática en Vercel o Render Static Site, API Node/Express en Render Web Service y MariaDB en MariaDB Cloud. Render ofrece PostgreSQL administrado; si se utiliza MariaDB allí tendría que mantenerse como servicio personalizado con disco persistente. MariaDB Cloud es la opción administrada que conserva el motor MariaDB y permite conexiones TLS.
+
+La API acepta `PORT` cuando la plataforma lo asigna, y conserva `API_PORT` para la ejecución local. Para MariaDB Cloud se configuran `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` y `DB_SSL=true`. La interfaz se compila con `VITE_API_URL` apuntando a la URL pública de la API, y `WEB_ORIGIN` debe coincidir exactamente con el dominio de la interfaz.
+
+La carga inicial se realiza aplicando `database/schema.sql` y, solo en una instalación de demostración, `database/seed.sql`. Para migrar datos existentes se genera primero `pnpm db:backup` y se importa el archivo SQL mediante el cliente MariaDB del proveedor. No se debe ejecutar `pnpm db:up` contra la base administrada, porque ese script está diseñado para MariaDB portátil local y vuelve a cargar la semilla.
+
+## 10. Entrega institucional pendiente
 
 Antes de declarar el sistema en producción se requieren dominio y certificado, infraestructura autorizada, política de conservación, prueba de restauración, cambio de credenciales, validación de formatos, capacitación, acta de aceptación y autorización del responsable de datos personales.

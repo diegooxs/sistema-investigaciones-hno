@@ -40,6 +40,11 @@ export function createStore() {
   const isManager = (user) => hasAnyRole(user, ['ADMINISTRADOR', 'ADMIN_INVESTIGADOR']);
   const researchWithOwner = (research) => ({ ...research, investigator: publicUser(users.find((user) => user.id === research.investigatorId)), documentCount: documents.filter((document) => document.researchId === research.id && document.current).length });
   const canManageResearch = (research, user) => isManager(user) || research.investigatorId === user.id;
+  const canReviewResearch = (research, user) =>
+    user.roles.includes('COMITE') && assignments.some((assignment) => {
+      const round = rounds.find((item) => item.id === assignment.roundId);
+      return assignment.memberId === user.id && round?.researchId === research.id;
+    });
   const changeResearchState = (research, nextState, user, reason) => {
     if (research.state === nextState) return;
     history.push({ id: nextHistoryId++, researchId: research.id, previousState: research.state, nextState, changedBy: user.id, reason, createdAt: now() });
@@ -92,7 +97,7 @@ export function createStore() {
     },
     listInvestigations(user) { return investigations.filter((item) => isManager(user) || item.investigatorId === user.id).map(researchWithOwner); },
     findInvestigation(id) { return investigations.find((item) => item.id === Number(id)); },
-    getInvestigation(id, user) { const item = this.findInvestigation(id); if (!item) fail('Investigación no encontrada', 404); if (!canManageResearch(item, user)) fail('No tienes permiso para consultar esta investigación', 403); return researchWithOwner(item); },
+    getInvestigation(id, user) { const item = this.findInvestigation(id); if (!item) fail('Investigación no encontrada', 404); if (!canManageResearch(item, user) && !canReviewResearch(item, user)) fail('No tienes permiso para consultar esta investigación', 403); return researchWithOwner(item); },
     createInvestigation(input, user) {
       const createdAt = now(); const owner = isManager(user) && input.investigatorId ? this.findUserById(input.investigatorId) : user;
       if (!owner?.active || !hasAnyRole(owner, ['ADMIN_INVESTIGADOR', 'INVESTIGADOR'])) fail('Selecciona un responsable de investigación activo');
@@ -138,7 +143,11 @@ export function createStore() {
       }
       const number = Math.max(0, ...rounds.filter((item) => item.researchId === research.id).map((item) => item.number)) + 1;
       const round = { id: nextRoundId++, researchId: research.id, number, state: 'ABIERTA', startsAt: now(), dueAt: dueAt.toISOString() }; rounds.push(round);
-      for (const selected of input.assignments) assignments.push({ id: nextAssignmentId++, roundId: round.id, committeeId: Number(selected.committeeId), memberId: Number(selected.memberId), state: 'PENDIENTE', assignedAt: now() });
+      for (const selected of input.assignments) {
+        const assignment = { id: nextAssignmentId++, roundId: round.id, committeeId: Number(selected.committeeId), memberId: Number(selected.memberId), state: 'PENDIENTE', assignedAt: now() };
+        assignments.push(assignment);
+        notify(assignment.memberId, research.id, 'Nueva revisión asignada', `Se te asignó la revisión de ${research.title} en la ronda ${number}.`);
+      }
       changeResearchState(research, 'EN_REVISION', user, `Apertura de la ronda de revisión ${number}`); return roundDto(round, user);
     },
     updateAssignmentStatus(id, status, user) {
@@ -162,6 +171,7 @@ export function createStore() {
       const rubric = rubrics.find((item) => item.id === Number(input.rubricId) && item.active && item.committeeId === assignment.committeeId); if (!rubric) fail('Selecciona una rúbrica activa del comité');
       if (!REVIEW_RECOMMENDATIONS.includes(input.recommendation)) fail('Selecciona una recomendación válida');
       const calculated = calculateWeightedScore(criteria.filter((item) => item.rubricId === rubric.id), input.scores);
+      const firstCompletion = assignment.state !== 'COMPLETADA';
       let evaluation = evaluationFor(assignment.id);
       const values = { rubricId: rubric.id, score: calculated.total, recommendation: input.recommendation, generalObservation: String(input.generalObservation ?? '').trim(), evaluatedAt: now() };
       if (!evaluation) { evaluation = { id: nextEvaluationId++, assignmentId: assignment.id, ...values }; evaluations.push(evaluation); } else Object.assign(evaluation, values);
@@ -169,6 +179,14 @@ export function createStore() {
       calculated.scores.forEach((item) => evaluationScores.push({ evaluationId: evaluation.id, ...item })); assignment.state = 'COMPLETADA'; round.state = 'EN_EVALUACION';
       const research = investigations.find((item) => item.id === round.researchId); const roundEvaluations = assignments.filter((item) => item.roundId === round.id).map((item) => evaluationFor(item.id)).filter(Boolean); const needsCorrection = roundEvaluations.some((item) => item.recommendation !== 'APROBADA');
       changeResearchState(research, needsCorrection ? 'CON_OBSERVACIONES' : 'EN_REVISION', user, needsCorrection ? 'Evaluación con observaciones o correcciones' : 'Evaluación registrada sin observaciones pendientes');
+      if (firstCompletion) {
+        users.filter((item) => item.active && isManager(item)).forEach((manager) => {
+          notify(manager.id, research.id, 'Evaluación completada', `Se completó una evaluación de ${research.title}.`);
+        });
+        if (input.recommendation === 'CON_CORRECCIONES') {
+          notify(research.investigatorId, research.id, 'Correcciones solicitadas', `El expediente ${research.title} recibió observaciones y requiere correcciones.`);
+        }
+      }
       return evaluationDto(evaluation);
     },
     getFeedback(researchId, user) {

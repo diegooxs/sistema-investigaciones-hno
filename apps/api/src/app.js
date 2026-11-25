@@ -41,9 +41,31 @@ const asyncRoute = (handler) => (req, res, next) => {
   Promise.resolve(handler(req, res, next)).catch(next);
 };
 
+/**
+ * Registro compacto de solicitudes HTTP para desarrollo y operación local.
+ * No registra cuerpos, contraseñas ni encabezados de autorización.
+ */
+function requestLogger(req, res, next) {
+  const startedAt = process.hrtime.bigint();
+  res.on('finish', () => {
+    const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    const timestamp = new Intl.DateTimeFormat('es-MX', {
+      dateStyle: 'short',
+      timeStyle: 'medium',
+      hour12: false,
+      timeZone: 'America/Mexico_City'
+    }).format(new Date());
+    const status = res.statusCode;
+    const marker = status >= 500 ? 'ERROR' : status >= 400 ? 'WARN ' : 'OK   ';
+    console.log(`[${timestamp}] ${marker} ${req.method.padEnd(6)} ${req.originalUrl} -> ${status} (${elapsedMs.toFixed(0)} ms)`);
+  });
+  next();
+}
+
 export function createApp({ store = createStore() } = {}) {
   const app = express();
   app.disable('x-powered-by');
+  app.use(requestLogger);
   app.use((_req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -91,6 +113,7 @@ export function createApp({ store = createStore() } = {}) {
   const administrator = authorize('ADMINISTRADOR');
   const reviewManager = authorize('ADMINISTRADOR', 'ADMIN_INVESTIGADOR');
   const reviewUsers = authorize('ADMINISTRADOR', 'ADMIN_INVESTIGADOR', 'INVESTIGADOR', 'COMITE');
+  const documentReaders = reviewUsers;
   app.get('/api/v1/auth/me', secured, (req, res) => res.json({ user: { id: req.user.id, name: req.user.name, email: req.user.email, roles: req.user.roles } }));
   app.get('/api/v1/users', secured, administrator, asyncRoute(async (_req, res) => res.json({ data: await store.listUsers() })));
   app.post('/api/v1/users', secured, administrator, asyncRoute(async (req, res) => {
@@ -145,7 +168,7 @@ export function createApp({ store = createStore() } = {}) {
   app.patch('/api/v1/investigations/:id', secured, researchTeam, asyncRoute(async (req, res) => {
     res.json({ data: await store.updateInvestigation(req.params.id, req.body ?? {}, req.user) });
   }));
-  app.get('/api/v1/investigations/:id/documents', secured, researchTeam, asyncRoute(async (req, res) => {
+  app.get('/api/v1/investigations/:id/documents', secured, documentReaders, asyncRoute(async (req, res) => {
     res.json({ data: await store.listDocuments(req.params.id, req.user) });
   }));
   app.post('/api/v1/investigations/:id/documents', secured, researchTeam, express.raw({ type: 'application/octet-stream', limit: '10mb' }), asyncRoute(async (req, res) => {
@@ -157,7 +180,7 @@ export function createApp({ store = createStore() } = {}) {
     if (validationError) return res.status(400).json({ error: validationError });
     res.status(201).json({ data: await store.addDocument(req.params.id, { type, originalName, mimeType, content: req.body }, req.user) });
   }));
-  app.get('/api/v1/documents/:id/download', secured, researchTeam, asyncRoute(async (req, res) => {
+  app.get('/api/v1/documents/:id/download', secured, documentReaders, asyncRoute(async (req, res) => {
     const document = await store.getDocument(req.params.id, req.user);
     res.setHeader('Content-Type', document.mimeType);
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(document.originalName)}`);

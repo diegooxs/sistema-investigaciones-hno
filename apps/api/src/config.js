@@ -3,7 +3,9 @@ import { config as loadEnv } from 'dotenv';
 loadEnv({ path: new URL('../../../.env', import.meta.url) });
 
 export const config = Object.freeze({
-  port: Number(process.env.API_PORT ?? 3001),
+  // En proveedores PaaS como Render, PORT es asignado por la plataforma.
+  // API_PORT se conserva para desarrollo local y para la operación institucional.
+  port: Number(process.env.PORT ?? process.env.API_PORT ?? 3001),
   webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
   jwtSecret: process.env.JWT_SECRET ?? 'solo-desarrollo-cambiar-esta-clave',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '2h',
@@ -14,7 +16,8 @@ export const config = Object.freeze({
     name: process.env.DB_NAME ?? 'hno_investigaciones',
     user: process.env.DB_USER ?? 'hno_app',
     password: process.env.DB_PASSWORD ?? 'cambiar_en_desarrollo',
-    connectionLimit: Number(process.env.DB_CONNECTION_LIMIT ?? 5)
+    connectionLimit: Number(process.env.DB_CONNECTION_LIMIT ?? 5),
+    ssl: String(process.env.DB_SSL ?? 'false').toLowerCase() === 'true'
   })
 });
 

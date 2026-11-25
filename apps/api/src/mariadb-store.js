@@ -212,7 +212,19 @@ export function createMariaDbStore({ pool = createDatabasePool() } = {}) {
       return rows[0] && { id: Number(rows[0].id), investigatorId: Number(rows[0].investigatorId), state: rows[0].state };
     },
     async getInvestigation(id, user) {
-      const access = canSeeAll(user) ? '' : ' AND i.investigador_id = ?';
+      const committeeAccess = user.roles.includes('COMITE')
+        ? ` AND EXISTS (
+            SELECT 1
+            FROM asignaciones_revision ar
+            JOIN rondas_revision rr ON rr.id = ar.ronda_id
+            WHERE rr.investigacion_id = i.id AND ar.integrante_id = ?
+          )`
+        : '';
+      const access = canSeeAll(user)
+        ? ''
+        : user.roles.includes('COMITE')
+          ? committeeAccess
+          : ' AND i.investigador_id = ?';
       const params = canSeeAll(user) ? [Number(id)] : [Number(id), user.id];
       const rows = await pool.query(`${researchSelect} WHERE i.id = ?${access} GROUP BY i.id`, params);
       if (!rows.length) {
@@ -371,7 +383,7 @@ export function createMariaDbStore({ pool = createDatabasePool() } = {}) {
       let roundId;
       try {
         await connection.beginTransaction();
-        const researchRows = await connection.query('SELECT id, estado AS state FROM investigaciones WHERE id = ? FOR UPDATE', [Number(researchId)]);
+        const researchRows = await connection.query('SELECT id, titulo AS title, estado AS state FROM investigaciones WHERE id = ? FOR UPDATE', [Number(researchId)]);
         if (!researchRows.length) fail('Investigación no encontrada', 404);
         if (researchRows[0].state !== 'BORRADOR') fail('La primera ronda solamente puede abrirse desde un expediente en borrador', 409);
         const documentRows = await connection.query('SELECT DISTINCT tipo FROM documentos WHERE investigacion_id = ? AND vigente = TRUE', [Number(researchId)]);
@@ -397,7 +409,13 @@ export function createMariaDbStore({ pool = createDatabasePool() } = {}) {
         const number = Number(numbers[0].lastNumber) + 1;
         const result = await connection.query('INSERT INTO rondas_revision (investigacion_id, numero, estado, inicia_en, vence_en) VALUES (?, ?, \'ABIERTA\', NOW(), ?)', [Number(researchId), number, dueAt]);
         roundId = Number(result.insertId);
-        for (const assignment of input.assignments) await connection.query('INSERT INTO asignaciones_revision (ronda_id, comite_id, integrante_id, estado) VALUES (?, ?, ?, \'PENDIENTE\')', [roundId, Number(assignment.committeeId), Number(assignment.memberId)]);
+        for (const assignment of input.assignments) {
+          await connection.query('INSERT INTO asignaciones_revision (ronda_id, comite_id, integrante_id, estado) VALUES (?, ?, ?, \'PENDIENTE\')', [roundId, Number(assignment.committeeId), Number(assignment.memberId)]);
+          await connection.query(
+            'INSERT INTO notificaciones (usuario_id, investigacion_id, titulo, mensaje) VALUES (?, ?, ?, ?)',
+            [Number(assignment.memberId), Number(researchId), 'Nueva revisión asignada', `Se te asignó la revisión de ${researchRows[0].title} en la ronda ${number}.`],
+          );
+        }
         await connection.query('UPDATE investigaciones SET estado = \'EN_REVISION\' WHERE id = ?', [Number(researchId)]);
         await connection.query('INSERT INTO historial_estados (investigacion_id, estado_anterior, estado_nuevo, cambiado_por, motivo) VALUES (?, \'BORRADOR\', \'EN_REVISION\', ?, ?)', [Number(researchId), user.id, `Apertura de la ronda de revisión ${number}`]);
         await connection.commit();
@@ -472,11 +490,12 @@ export function createMariaDbStore({ pool = createDatabasePool() } = {}) {
         await connection.beginTransaction();
         const assignmentRows = await connection.query(`
           SELECT ar.id, ar.ronda_id AS roundId, ar.comite_id AS committeeId, ar.integrante_id AS memberId,
-                 rr.investigacion_id AS researchId, rr.estado AS roundState
+                 ar.estado AS assignmentState, rr.investigacion_id AS researchId, rr.estado AS roundState
           FROM asignaciones_revision ar JOIN rondas_revision rr ON rr.id = ar.ronda_id
           WHERE ar.id = ? FOR UPDATE`, [Number(assignmentId)]);
         if (!assignmentRows.length) fail('Asignación no encontrada', 404);
         const assignment = assignmentRows[0]; researchId = Number(assignment.researchId);
+        const firstCompletion = assignment.assignmentState !== 'COMPLETADA';
         if (Number(assignment.memberId) !== user.id || !user.roles.includes('COMITE')) fail('Solo el integrante asignado puede registrar la evaluación', 403);
         if (assignment.roundState === 'CERRADA') fail('La ronda ya está cerrada', 409);
         if (!REVIEW_RECOMMENDATIONS.includes(input.recommendation)) fail('Selecciona una recomendación válida', 400);
@@ -501,10 +520,30 @@ export function createMariaDbStore({ pool = createDatabasePool() } = {}) {
           JOIN asignaciones_revision ar ON ar.id = e.asignacion_id
           WHERE ar.ronda_id = ? AND e.dictamen <> 'APROBADA'`, [Number(assignment.roundId)]);
         const nextState = Number(negative[0].total) > 0 ? 'CON_OBSERVACIONES' : 'EN_REVISION';
-        const currentState = await connection.query('SELECT estado AS state FROM investigaciones WHERE id = ? FOR UPDATE', [researchId]);
+        const currentState = await connection.query('SELECT investigador_id AS ownerId, titulo AS title, estado AS state FROM investigaciones WHERE id = ? FOR UPDATE', [researchId]);
         if (currentState[0].state !== nextState) {
           await connection.query('UPDATE investigaciones SET estado = ? WHERE id = ?', [nextState, researchId]);
           await connection.query('INSERT INTO historial_estados (investigacion_id, estado_anterior, estado_nuevo, cambiado_por, motivo) VALUES (?, ?, ?, ?, ?)', [researchId, currentState[0].state, nextState, user.id, nextState === 'CON_OBSERVACIONES' ? 'Evaluación con observaciones o correcciones' : 'Evaluación registrada sin observaciones pendientes']);
+        }
+        if (firstCompletion) {
+          const managerRows = await connection.query(`
+            SELECT DISTINCT u.id
+            FROM usuarios u
+            JOIN usuario_roles ur ON ur.usuario_id = u.id
+            JOIN roles r ON r.id = ur.rol_id
+            WHERE u.activo = TRUE AND r.codigo IN ('ADMINISTRADOR', 'ADMIN_INVESTIGADOR')`);
+          for (const manager of managerRows) {
+            await connection.query(
+              'INSERT INTO notificaciones (usuario_id, investigacion_id, titulo, mensaje) VALUES (?, ?, ?, ?)',
+              [Number(manager.id), researchId, 'Evaluación completada', `Se completó una evaluación de ${currentState[0].title}.`],
+            );
+          }
+          if (input.recommendation === 'CON_CORRECCIONES') {
+            await connection.query(
+              'INSERT INTO notificaciones (usuario_id, investigacion_id, titulo, mensaje) VALUES (?, ?, ?, ?)',
+              [Number(currentState[0].ownerId), researchId, 'Correcciones solicitadas', `El expediente ${currentState[0].title} recibió observaciones y requiere correcciones.`],
+            );
+          }
         }
         await connection.commit();
       } catch (error) {

@@ -21,7 +21,7 @@ El Product Backlog inicial contiene 26 elementos ordenados por valor, dependenci
 | 3 | 5 y 6 | Registro de investigaciones, anexos, PDF y control de versiones. |
 | 4 | 7 y 8 | Rondas de revisión y asignación de integrantes de comités. |
 | 5 | 9 y 10 | Rúbricas, evaluaciones, observaciones, correcciones y nuevas versiones. |
-| 6 | 11 y 12 | Votación, historial de estados, notificaciones y autorización. |
+| 6 | 11 y 12 | Dictámenes por comité, historial de estados, notificaciones y autorización. |
 | 7 | 13 y 14 | Publicación, consulta, integración y pruebas de aceptación. |
 | 8 | 15 y 16 | Estabilización, despliegue, manuales, capacitación y entrega. |
 
@@ -337,7 +337,7 @@ El Objetivo del Sprint consiste en permitir que cada comité evalúe una asignac
 | HU-18 | Evaluar y registrar observaciones. | Alta | 8 | Captura por asignación y cálculo ponderado en el servidor. |
 | HU-19 | Atender correcciones y nuevas versiones. | Alta | 8 | Observaciones, carga de correcciones y nueva ronda trazable. |
 
-El alcance no incluye la autorización institucional definitiva, votación ni publicación. Esas decisiones pertenecen a los Sprints 6 y 7. En este incremento una recomendación favorable mantiene el expediente En revisión; una recomendación con correcciones o no favorable lo coloca Con observaciones, sin convertirla por sí misma en aprobación o rechazo definitivo.
+El alcance no incluye la autorización institucional definitiva, el dictamen administrativo ni la publicación. Esas decisiones pertenecen a los Sprints 6 y 7. En este incremento una recomendación favorable mantiene el expediente En revisión; una recomendación con correcciones o no favorable lo coloca Con observaciones, sin convertirla por sí misma en aprobación o rechazo definitivo.
 
 ### 4.6.2 Historias de usuario
 
@@ -345,7 +345,7 @@ El alcance no incluye la autorización institucional definitiva, votación ni pu
 
 **Como** responsable administrativo, **quiero** crear una rúbrica para cada comité, **para** que las evaluaciones utilicen criterios y ponderaciones comunes.
 
-**Criterios de aceptación:** la rúbrica pertenece a un comité activo; contiene al menos dos criterios; cada criterio tiene descripción, ponderación positiva y puntaje máximo; la suma de ponderaciones es exactamente 100%; al crear una versión nueva se desactiva la anterior sin borrarla; el integrante solo consulta rúbricas de los comités a los que pertenece.
+**Criterios de aceptación:** la rúbrica pertenece a un comité activo; contiene uno o más criterios; cada criterio tiene descripción, ponderación positiva y puntaje máximo; la suma de ponderaciones es exactamente 100%; se permite utilizar un único criterio con ponderación de 100%; al crear una versión nueva se desactiva la anterior sin borrarla; el integrante solo consulta rúbricas de los comités a los que pertenece.
 
 #### HU-18 Evaluar y registrar observaciones
 
@@ -432,11 +432,11 @@ Las reglas centrales son: ponderación total igual a 100%; puntajes dentro de l�
 
 ### 4.6.6 Resultados de verificación
 
-La verificación técnica actualizada al 5 de noviembre de 2026 obtuvo 21 pruebas unitarias y de API aprobadas, tres pruebas de integración aprobadas contra MariaDB 11.4.10 y una compilación de producción de React sin errores. La prueba integral cubre registro del expediente, cinco tipos documentales obligatorios, apertura de ronda, restricción por rol, creación de rúbrica, evaluación ponderada, consulta confidencial, nueva versión, reenvío, dictamen, autorización, notificaciones, publicación y reporte. Estas evidencias demuestran funcionamiento técnico; no sustituyen la aceptación formal del Product Owner.
+La verificación técnica actualizada al 23 de noviembre de 2026 obtuvo 22 pruebas unitarias y de API aprobadas, tres pruebas de integración aprobadas contra MariaDB 11.4.10 y una compilación de producción de React sin errores. La prueba integral cubre registro del expediente, cinco tipos documentales obligatorios, apertura de ronda, restricción por rol, creación de rúbrica con uno o más criterios, evaluación ponderada, consulta confidencial, nueva versión, reenvío, dictamen, autorización, notificaciones, publicación y reporte. Estas evidencias demuestran funcionamiento técnico; no sustituyen la aceptación formal del Product Owner.
 
 | Verificación | Resultado |
 |---|---|
-| 21 pruebas unitarias y de API | Aprobada |
+| 22 pruebas unitarias y de API | Aprobada |
 | 3 pruebas de integración con MariaDB | Aprobada |
 | Persistencia del detalle por criterio | Aprobada |
 | Compilación de producción de React | Aprobada |
@@ -447,7 +447,7 @@ La verificación técnica actualizada al 5 de noviembre de 2026 obtuvo 21 prueba
 
 La Sprint Review está prevista para el 16 de abril de 2027, con hora por definir con el Product Owner. La demostración debe incluir creación de una rúbrica, rechazo de ponderaciones inválidas, captura de puntajes, cálculo automático, consulta de observaciones, carga de una corrección y apertura de la ronda siguiente. El Product Owner deberá confirmar los criterios reales de cada comité y la terminología de las recomendaciones antes de utilizar el módulo en producción.
 
-En la Sprint Retrospective se identificaron tres resultados positivos: las reglas se comparten entre pruebas y persistencia; el cálculo no depende de la interfaz; y la corrección conserva antecedentes en lugar de sobrescribirlos. Como acciones futuras se acordó no interpretar una recomendación como dictamen institucional, incorporar votación y autorización únicamente en el Sprint 6 y definir con el hospital la política de notificaciones.
+En la Sprint Retrospective se identificaron tres resultados positivos: las reglas se comparten entre pruebas y persistencia; el cálculo no depende de la interfaz; y la corrección conserva antecedentes en lugar de sobrescribirlos. Como acciones futuras se acordó no interpretar una recomendación como dictamen institucional, incorporar el dictamen administrativo y la autorización únicamente en el Sprint 6 y definir con el hospital la política de notificaciones.
 
 ## 4.7 Sprint 6. Dictamen, autorización y notificaciones
 
@@ -485,10 +485,10 @@ El Sprint publica únicamente el documento `INVESTIGACION_PDF` vigente de una in
 
 ### 4.8.2 Estructura y verificación
 
-El flujo usa `POST /investigations/:id/publish`, `GET /publications`, la descarga protegida del documento publicado y `GET /reports/executive`. Las pruebas PA-35 a PA-39 validaron publicación, bloqueo de expedientes no aprobados, consulta, descarga, indicadores y protección de datos. El resultado consolidado es de 21 pruebas unitarias y de API, tres pruebas de integración con MariaDB y compilación de React aprobadas.
+El flujo usa `POST /investigations/:id/publish`, `GET /publications`, la descarga protegida del documento publicado y `GET /reports/executive`. Las pruebas PA-35 a PA-39 validaron publicación, bloqueo de expedientes no aprobados, consulta, descarga, indicadores y protección de datos. El resultado consolidado es de 22 pruebas unitarias y de API, tres pruebas de integración con MariaDB y compilación de React aprobadas.
 
 ## 4.9 Sprint 8. Estabilización, despliegue y entrega
 
 **Estado:** cierre técnico local completado; instalación y aceptación institucional pendientes.
 
-Los Sprints 1 al 7 funcionan localmente. El Sprint 8 incorporó validación de configuración de producción, encabezados HTTP de seguridad, preparación reproducible, ejecución compilada, manual técnico, manual de usuario y respaldo y restauración con manifiesto SHA-256. El 8 de noviembre de 2026 se aprobaron 22 pruebas unitarias y de API, tres pruebas con MariaDB, la compilación de React y el ciclo de respaldo y restauración. La instalación en infraestructura del hospital, HTTPS, capacitación y acta de aceptación permanecen pendientes porque requieren recursos, credenciales y autorización institucionales.
+Los ocho Sprints cuentan con implementación y verificación local. El Sprint 8 incorporó validación de configuración de producción, encabezados HTTP de seguridad, registro de solicitudes HTTP en la consola de la API, preparación reproducible, ejecución compilada, manual técnico, manual de usuario y respaldo y restauración con manifiesto SHA-256. La verificación de cierre del 23 de noviembre de 2026 mantiene 22 pruebas unitarias y de API aprobadas, tres pruebas con MariaDB, la compilación de React y el ciclo de respaldo y restauración. La instalación en infraestructura del hospital, HTTPS, capacitación y acta de aceptación permanecen pendientes porque requieren recursos, credenciales y autorización institucionales.

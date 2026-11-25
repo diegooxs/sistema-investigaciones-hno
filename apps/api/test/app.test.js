@@ -244,6 +244,13 @@ test('los Sprints 4 y 5 cubren asignación, rúbrica, evaluación y reenvío de 
   assert.equal(round.body.data.assignmentCount, 1);
   assert.equal(round.body.data.research.state, 'EN_REVISION');
 
+  const committeeDocuments = await request(app).get(`/api/v1/investigations/${researchId}/documents`).set(committeeAuth);
+  assert.equal(committeeDocuments.status, 200);
+  assert.equal(committeeDocuments.body.data.length, 5);
+  const committeeDownload = await request(app).get(`/api/v1/documents/${committeeDocuments.body.data[4].id}/download`).set(committeeAuth);
+  assert.equal(committeeDownload.status, 200);
+  assert.match(committeeDownload.headers['content-type'], /application\/pdf/);
+
   const researcherCannotOpenRounds = await request(app).post(`/api/v1/investigations/${researchId}/rounds`).set(investigatorAuth).send({
     dueAt: '2099-03-20T23:59:00.000Z', assignments: [{ committeeId: 1, memberId: committeeLogin.body.user.id }]
   });

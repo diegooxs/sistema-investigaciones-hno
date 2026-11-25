@@ -24,6 +24,71 @@ const documentTypes = [
   ["OTRO", "Otro documento"],
 ];
 const documentTypeLabels = Object.fromEntries(documentTypes);
+const rubricPresets = {
+  GENERAL: [
+    {
+      name: "Evaluación general del protocolo",
+      criteria: [
+        {
+          description: "Valoración general de la investigación",
+          weight: 100,
+          maximumScore: 10,
+        },
+      ],
+    },
+  ],
+  ETICA: [
+    {
+      name: "Evaluación ética del protocolo",
+      criteria: [
+        {
+          description: "Protección de participantes y consentimiento informado",
+          weight: 60,
+          maximumScore: 10,
+        },
+        {
+          description: "Riesgos, beneficios y confidencialidad",
+          weight: 40,
+          maximumScore: 10,
+        },
+      ],
+    },
+  ],
+  INVESTIGACION: [
+    {
+      name: "Evaluación metodológica",
+      criteria: [
+        {
+          description: "Coherencia metodológica y objetivos",
+          weight: 60,
+          maximumScore: 10,
+        },
+        {
+          description: "Viabilidad y relevancia institucional",
+          weight: 40,
+          maximumScore: 10,
+        },
+      ],
+    },
+  ],
+  BIOSEGURIDAD: [
+    {
+      name: "Evaluación de bioseguridad",
+      criteria: [
+        {
+          description: "Identificación y control de riesgos biológicos",
+          weight: 60,
+          maximumScore: 10,
+        },
+        {
+          description: "Medidas preventivas y manejo de residuos",
+          weight: 40,
+          maximumScore: 10,
+        },
+      ],
+    },
+  ],
+};
 const requiredDocumentTypes = [
   "ANEXO_A",
   "ANEXO_E",
@@ -62,7 +127,7 @@ async function api(path, session, options = {}) {
   return data;
 }
 
-async function download(path, session, fallbackName) {
+async function fetchDocumentBlob(path, session) {
   const response = await fetch(`${API_URL}${path}`, {
     headers: { Authorization: `Bearer ${session.token}` },
   });
@@ -71,8 +136,15 @@ async function download(path, session, fallbackName) {
       (await response.json().catch(() => ({}))).error ??
         "No fue posible descargar el archivo",
     );
-  const blob = await response.blob();
-  const disposition = response.headers.get("content-disposition") ?? "";
+  return {
+    blob: await response.blob(),
+    disposition: response.headers.get("content-disposition") ?? "",
+    mimeType: response.headers.get("content-type") ?? "",
+  };
+}
+
+async function download(path, session, fallbackName) {
+  const { blob, disposition } = await fetchDocumentBlob(path, session);
   const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
@@ -209,7 +281,7 @@ function Panel({ investigations, onOpenResearch }) {
         <article className="activity-panel">
           <div className="panel-heading">
             <div>
-              <p className="section-label">Sprint 3</p>
+              <p className="section-label">Gestión documental</p>
               <h2>Registro y gestión documental</h2>
             </div>
             <button
@@ -234,8 +306,8 @@ function Panel({ investigations, onOpenResearch }) {
           </div>
         </article>
         <aside className="quick-panel">
-          <p className="section-label">Alcance actual</p>
-          <h2>Incremento del Sprint 3</h2>
+          <p className="section-label">Funciones disponibles</p>
+          <h2>Gestión de expedientes</h2>
           <div className="scope-list">
             <span>✓ Registro y actualización</span>
             <span>✓ Descarga de plantillas</span>
@@ -695,7 +767,7 @@ function ResearchWorkspace({
     <div className="research-workspace">
       <div className="workspace-header">
         <div>
-          <p className="section-label">Sprint 3</p>
+          <p className="section-label">Gestión documental</p>
           <h2>Investigaciones y documentos</h2>
           <p>
             Registra expedientes, utiliza las plantillas y conserva cada versión
@@ -810,7 +882,7 @@ function ResearchWorkspace({
             <p className="section-label">Formatos de apoyo</p>
             <h2>Plantillas descargables</h2>
           </div>
-          <span>La institución deberá validar el contenido definitivo.</span>
+          <span>Formatos oficiales disponibles para descargar.</span>
         </div>
         <div className="template-grid">
           {templates.map((template) => (
@@ -1154,6 +1226,128 @@ function CommitteeMembers({ committee, reviewers, onSave }) {
   );
 }
 
+function ReviewDocuments({ round, session, setMessage }) {
+  const [documents, setDocuments] = useState([]);
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    api(`/investigations/${round.research.id}/documents`, session)
+      .then((result) => {
+        if (active) setDocuments(result.data);
+      })
+      .catch((error) => {
+        if (active) setMessage(error.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [round.research.id, session.token, setMessage]);
+
+  useEffect(
+    () => () => {
+      if (preview?.url) URL.revokeObjectURL(preview.url);
+    },
+    [preview],
+  );
+
+  function closePreview() {
+    if (preview?.url) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  }
+
+  async function openPreview(document) {
+    if (!document.mimeType?.toLowerCase().includes("pdf")) {
+      setMessage("La vista previa está disponible para archivos PDF. Usa Descargar para este formato.");
+      return;
+    }
+    try {
+      const { blob } = await fetchDocumentBlob(
+        `/documents/${document.id}/download`,
+        session,
+      );
+      if (preview?.url) URL.revokeObjectURL(preview.url);
+      setPreview({
+        url: URL.createObjectURL(blob),
+        name: document.originalName,
+      });
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  return (
+    <section className="review-documents" aria-label="Documentos para revisión">
+      <div className="review-documents-heading">
+        <div>
+          <strong>Documentos del expediente</strong>
+          <small>Consulta los archivos asignados antes de emitir tu evaluación.</small>
+        </div>
+        <span>{documents.length} archivo(s)</span>
+      </div>
+      {loading ? (
+        <p className="muted-message">Cargando documentos…</p>
+      ) : documents.length === 0 ? (
+        <p className="muted-message">Este expediente todavía no tiene documentos disponibles.</p>
+      ) : (
+        <div className="review-document-list">
+          {documents.map((document) => (
+            <div className="review-document-row" key={document.id}>
+              <div>
+                <strong>{document.originalName}</strong>
+                <small>
+                  {documentTypeLabels[document.type] ?? document.type} · versión {document.version} · {formatFileSize(document.size)}
+                  {document.current ? " · Vigente" : " · Antecedente"}
+                </small>
+              </div>
+              <div className="review-document-actions">
+                <button
+                  type="button"
+                  className="outline-button"
+                  onClick={() => openPreview(document)}
+                  disabled={!document.mimeType?.toLowerCase().includes("pdf")}
+                  title={document.mimeType?.toLowerCase().includes("pdf") ? "Ver PDF" : "La vista previa solo está disponible para PDF"}
+                >
+                  Ver documento
+                </button>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() =>
+                    download(
+                      `/documents/${document.id}/download`,
+                      session,
+                      document.originalName,
+                    ).catch((error) => setMessage(error.message))
+                  }
+                >
+                  Descargar
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {preview && (
+        <div className="document-preview" role="dialog" aria-label={`Vista previa de ${preview.name}`}>
+          <div className="document-preview-heading">
+            <strong>{preview.name}</strong>
+            <button type="button" className="text-button" onClick={closePreview}>
+              Cerrar visor
+            </button>
+          </div>
+          <iframe title={`Vista previa de ${preview.name}`} src={preview.url} />
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ReviewWorkspace({
   session,
   investigations,
@@ -1241,11 +1435,11 @@ function ReviewWorkspace({
     <section className="review-workspace">
       <div className="workspace-header">
         <div>
-          <p className="section-label">Sprint 4</p>
+          <p className="section-label">Seguimiento de revisiones</p>
           <h2>Rondas y asignaciones</h2>
           <p>Organiza la revisión por comité, responsable y fecha límite.</p>
         </div>
-        <span className="sprint-chip">Incremento operativo</span>
+        <span className="sprint-chip">Gestión de revisiones</span>
       </div>
       {isManager && (
         <>
@@ -1346,12 +1540,12 @@ function ReviewWorkspace({
         <div className="panel-heading">
           <div>
             <p className="section-label">Seguimiento</p>
-            <h3>Rondas visibles para tu rol</h3>
+          <h3>Rondas asignadas</h3>
           </div>
           <span>{rounds.length} ronda(s)</span>
         </div>
         {!rounds.length ? (
-          <p className="muted-message">Todavía no hay rondas asignadas.</p>
+          <p className="muted-message">No hay rondas asignadas en este momento.</p>
         ) : (
           <div className="round-list">
             {rounds.map((round) => (
@@ -1383,6 +1577,11 @@ function ReviewWorkspace({
                   {round.completedCount} de {round.assignmentCount} revisiones
                   completadas
                 </p>
+                <ReviewDocuments
+                  round={round}
+                  session={session}
+                  setMessage={setMessage}
+                />
                 {round.assignments.map((assignment) => (
                   <div className="assignment-row" key={assignment.id}>
                     <div>
@@ -1434,9 +1633,11 @@ function EvaluationWorkspace({
   const [rubrics, setRubrics] = useState([]);
   const [committees, setCommittees] = useState([]);
   const [criteria, setCriteria] = useState([
-    { description: "", weight: 50, maximumScore: 10 },
-    { description: "", weight: 50, maximumScore: 10 },
+    { description: "", weight: 100, maximumScore: 10 },
   ]);
+  const [rubricCommitteeId, setRubricCommitteeId] = useState("");
+  const [rubricPreset, setRubricPreset] = useState("");
+  const [rubricName, setRubricName] = useState("");
   const [selectedAssignment, setSelectedAssignment] = useState("");
   const [selectedRubric, setSelectedRubric] = useState("");
   const [scores, setScores] = useState({});
@@ -1468,11 +1669,41 @@ function EvaluationWorkspace({
   const rubric = matchingRubrics.find(
     (item) => item.id === Number(selectedRubric),
   );
+  const selectedRubricCommittee = committees.find(
+    (item) => item.id === Number(rubricCommitteeId),
+  );
+  const availableRubricPresets = [
+    ...(rubricPresets[selectedRubricCommittee?.type] ?? []),
+    ...(selectedRubricCommittee?.type ? rubricPresets.GENERAL : []),
+  ];
+  const criteriaWeight = criteria.reduce(
+    (total, item) => total + Number(item.weight || 0),
+    0,
+  );
+  const rubricReady =
+    criteriaWeight === 100 &&
+    criteria.every(
+      (item) => String(item.description).trim() && Number(item.maximumScore) > 0,
+    );
+  const rubricHint = rubricReady
+    ? "La rúbrica está lista para guardarse."
+    : criteriaWeight > 100
+      ? `Reduce ${criteriaWeight - 100} puntos porcentuales para llegar a 100 %.`
+      : criteriaWeight < 100
+        ? `Agrega ${100 - criteriaWeight} puntos porcentuales para llegar a 100 %.`
+        : "Completa la descripción y el puntaje máximo de cada criterio.";
 
   async function createRubric(event) {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
+    if (
+      !window.confirm(
+        "¿Guardar esta rúbrica? Después de utilizarla en una evaluación, se conservará como una versión histórica.",
+      )
+    ) {
+      return;
+    }
     try {
       await api("/rubrics", session, {
         method: "POST",
@@ -1483,9 +1714,11 @@ function EvaluationWorkspace({
         }),
       });
       setCriteria([
-        { description: "", weight: 50, maximumScore: 10 },
-        { description: "", weight: 50, maximumScore: 10 },
+        { description: "", weight: 100, maximumScore: 10 },
       ]);
+      setRubricCommitteeId("");
+      setRubricPreset("");
+      setRubricName("");
       formElement.reset();
       await load();
       setMessage("Rúbrica guardada y activada para el comité.");
@@ -1493,9 +1726,32 @@ function EvaluationWorkspace({
       setMessage(error.message);
     }
   }
+  function applyRubricPreset(event) {
+    const preset = availableRubricPresets.find(
+      (item) => item.name === event.target.value,
+    );
+    setRubricPreset(event.target.value);
+    setRubricName(preset?.name ?? "");
+    if (preset) {
+      setCriteria(
+        preset.criteria.map((item) => ({
+          description: item.description,
+          weight: item.weight,
+          maximumScore: item.maximumScore,
+        })),
+      );
+    }
+  }
   async function submitEvaluation(event) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    if (
+      !window.confirm(
+        "¿Confirmar esta evaluación? Después de guardarla quedará registrada para la ronda y el comité.",
+      )
+    ) {
+      return;
+    }
     try {
       await api(`/assignments/${selectedAssignment}/evaluation`, session, {
         method: "PUT",
@@ -1538,33 +1794,51 @@ function EvaluationWorkspace({
     <section className="evaluation-workspace">
       <div className="workspace-header">
         <div>
-          <p className="section-label">Sprint 5</p>
+          <p className="section-label">Evaluación y correcciones</p>
           <h2>Rúbricas, evaluación y correcciones</h2>
           <p>
             Evalúa con criterios objetivos y conserva la trazabilidad de las
             observaciones.
           </p>
         </div>
-        <span className="sprint-chip">Incremento operativo</span>
+        <span className="sprint-chip">Gestión por etapas</span>
       </div>
+      <ol className="evaluation-steps" aria-label="Etapas de evaluación">
+        <li className={isManager ? "is-current" : ""}>
+          <b>1</b><span>Configurar</span><small>Rúbrica al 100 %</small>
+        </li>
+        <li className={isReviewer ? "is-current" : ""}>
+          <b>2</b><span>Evaluar</span><small>Calificación y observaciones</small>
+        </li>
+        <li className={canSeeFeedback ? "is-current" : ""}>
+          <b>3</b><span>Dar seguimiento</span><small>Correcciones y resultados</small>
+        </li>
+      </ol>
       {isManager && (
         <form className="rubric-form" onSubmit={createRubric}>
           <div className="form-heading">
             <div>
-              <p className="section-label">Configuración</p>
-              <h3>Nueva versión de rúbrica</h3>
+              <p className="section-label">Paso 1 · Configuración</p>
+              <h3>Define cómo se evaluará la investigación</h3>
+              <p className="form-help">Selecciona un comité, asigna un nombre y distribuye los criterios hasta completar 100 %.</p>
             </div>
-            <b>
-              {criteria.reduce(
-                (total, item) => total + Number(item.weight || 0),
-                0,
-              )}
-              % ponderado
+            <b className={criteriaWeight === 100 ? "weight-total is-valid" : "weight-total"}>
+              {criteriaWeight}% <span>de 100%</span>
             </b>
           </div>
           <label>
             Comité
-            <select name="committeeId" required defaultValue="">
+            <select
+              name="committeeId"
+              required
+              value={rubricCommitteeId}
+              onChange={(event) => {
+                setRubricCommitteeId(event.target.value);
+                setRubricPreset("");
+                setRubricName("");
+                setCriteria([{ description: "", weight: 100, maximumScore: 10 }]);
+              }}
+            >
               <option value="" disabled>
                 Selecciona un comité
               </option>
@@ -1580,9 +1854,36 @@ function EvaluationWorkspace({
             <input
               name="name"
               required
+              value={rubricName}
+              onChange={(event) => setRubricName(event.target.value)}
               placeholder="Ej. Evaluación ética del protocolo"
             />
           </label>
+          <label className="wide">
+            Plantilla recomendada (opcional)
+            <select
+              value={rubricPreset}
+              onChange={applyRubricPreset}
+              disabled={!rubricCommitteeId}
+            >
+              <option value="">
+                {rubricCommitteeId
+                  ? "Selecciona una plantilla o captura tus criterios"
+                  : "Primero selecciona un comité"}
+              </option>
+              {availableRubricPresets.map((preset) => (
+                <option value={preset.name} key={preset.name}>
+                  {preset.name} ({preset.criteria.length} criterio{preset.criteria.length === 1 ? "" : "s"})
+                </option>
+              ))}
+            </select>
+            <small className="form-help">
+              Puedes usar un solo criterio con 100 % o distribuir el porcentaje entre varios criterios.
+            </small>
+          </label>
+          <p className="form-help criteria-intro">
+            Cada criterio representa un aspecto que el comité revisará. Puedes dejar uno solo al 100 % o agregar más y repartir la ponderación.
+          </p>
           <div className="criteria-editor">
             {criteria.map((criterion, index) => (
               <div key={index}>
@@ -1599,7 +1900,7 @@ function EvaluationWorkspace({
                     )
                   }
                   required
-                  placeholder="Descripción del criterio"
+                  placeholder="Ej. Pertinencia y valor científico"
                 />
                 <label>
                   Peso %
@@ -1639,7 +1940,7 @@ function EvaluationWorkspace({
                     required
                   />
                 </label>
-                {criteria.length > 2 && (
+                {criteria.length > 1 && (
                   <button
                     type="button"
                     className="text-button"
@@ -1668,16 +1969,22 @@ function EvaluationWorkspace({
             >
               Agregar criterio
             </button>
-            <button className="primary-button">Guardar rúbrica</button>
+            <button className="primary-button" disabled={!rubricReady}>
+              Guardar rúbrica
+            </button>
           </div>
+          <p className={`form-hint ${rubricReady ? "is-valid" : ""}`} role="status">
+            {rubricHint}
+          </p>
         </form>
       )}
       {isReviewer && (
         <form className="evaluation-form" onSubmit={submitEvaluation}>
           <div className="form-heading">
             <div>
-              <p className="section-label">Bandeja del revisor</p>
-              <h3>Registrar evaluación</h3>
+              <p className="section-label">Paso 2 · Evaluación</p>
+              <h3>Evalúa una investigación asignada</h3>
+              <p className="form-help">Selecciona una revisión, califica todos los criterios y envía tu recomendación.</p>
             </div>
           </div>
           <label>
@@ -1706,6 +2013,13 @@ function EvaluationWorkspace({
                 ))}
             </select>
           </label>
+          {assignment && (
+            <ReviewDocuments
+              round={assignment.round}
+              session={session}
+              setMessage={setMessage}
+            />
+          )}
           <label>
             Rúbrica activa
             <select
@@ -1784,8 +2098,9 @@ function EvaluationWorkspace({
         <section className="feedback-panel">
           <div className="panel-heading">
             <div>
-              <p className="section-label">Seguimiento</p>
-              <h3>Observaciones del expediente</h3>
+              <p className="section-label">Paso 3 · Seguimiento</p>
+              <h3>Resultados y correcciones</h3>
+              <p className="form-help">Consulta las evaluaciones y envía una nueva versión cuando el expediente tenga observaciones.</p>
             </div>
             <select
               value={feedbackResearch}
@@ -1856,6 +2171,105 @@ function EvaluationWorkspace({
   );
 }
 
+function NotificationBell({ session, setMessage, onNavigate }) {
+  const [items, setItems] = useState([]);
+  const [open, setOpen] = useState(false);
+
+  async function load() {
+    try {
+      setItems((await api("/notifications", session)).data);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    const interval = window.setInterval(load, 30000);
+    return () => window.clearInterval(interval);
+  }, [session.token]);
+
+  async function markRead(id) {
+    try {
+      await api(`/notifications/${id}/read`, session, { method: "PATCH" });
+      await load();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function markAllRead() {
+    try {
+      await Promise.all(
+        items
+          .filter((item) => !item.read)
+          .map((item) => api(`/notifications/${item.id}/read`, session, { method: "PATCH" })),
+      );
+      await load();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  const unread = items.filter((item) => !item.read).length;
+  return (
+    <div className="notification-bell">
+      <button
+        type="button"
+        className="notification-bell-button"
+        aria-label={`Notificaciones${unread ? `, ${unread} sin leer` : ""}`}
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span aria-hidden="true">🔔</span>
+        {unread > 0 && <b>{unread > 99 ? "99+" : unread}</b>}
+      </button>
+      {open && (
+        <div className="notification-popover" role="dialog" aria-label="Notificaciones">
+          <div className="notification-popover-heading">
+            <div>
+              <strong>Notificaciones</strong>
+              <small>{unread ? `${unread} sin leer` : "Todo al día"}</small>
+            </div>
+            {unread > 0 && (
+              <button type="button" className="text-button" onClick={markAllRead}>
+                Marcar todas
+              </button>
+            )}
+          </div>
+          {!items.length ? (
+            <p className="muted-message">No tienes notificaciones pendientes.</p>
+          ) : (
+            <div className="notification-popover-list">
+              {items.slice(0, 6).map((item) => (
+                <button
+                  type="button"
+                  className={`notification-popover-item ${item.read ? "is-read" : ""}`}
+                  key={item.id}
+                  onClick={async () => {
+                    if (!item.read) await markRead(item.id);
+                    if (item.researchId) {
+                      setOpen(false);
+                      onNavigate("evaluaciones");
+                    }
+                  }}
+                >
+                  <span className="notification-dot" aria-hidden="true" />
+                  <span>
+                    <strong>{item.title}</strong>
+                    <small>{item.message}</small>
+                    <em>{new Date(item.createdAt).toLocaleString("es-MX")}</em>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NotificationCenter({ session, setMessage }) {
   const [items, setItems] = useState([]);
   async function load() {
@@ -1923,9 +2337,18 @@ function DecisionWorkspace({ session, investigations, refreshInvestigations, set
       setMessage("Investigación autorizada institucionalmente.");
     } catch (error) { setMessage(error.message); }
   }
+  const pendingEvaluations = summary
+    ? summary.committees.reduce(
+        (total, item) => total + Math.max(0, item.assignmentCount - item.completedCount),
+        0,
+      )
+    : 0;
+  const pendingDecisions = summary
+    ? summary.committees.filter((item) => !item.decision).length
+    : 0;
   return (
     <section className="decision-workspace">
-      <div className="workspace-header"><div><p className="section-label">Sprint 6</p><h2>Dictamen y autorización</h2><p>Consolida las evaluaciones de los comités y conserva la trazabilidad de la decisión.</p></div><span className="sprint-chip">Control institucional</span></div>
+      <div className="workspace-header"><div><p className="section-label">Decisión institucional</p><h2>Dictamen y autorización</h2><p>Consolida las evaluaciones de los comités y conserva la trazabilidad de la decisión.</p></div><span className="sprint-chip">Control institucional</span></div>
       <label className="research-selector">Expediente
         <select value={researchId} onChange={(event) => { setResearchId(event.target.value); load(event.target.value).catch((error) => setMessage(error.message)); }}>
           <option value="">Selecciona una investigación con ronda</option>
@@ -1935,17 +2358,25 @@ function DecisionWorkspace({ session, investigations, refreshInvestigations, set
       {summary && <>
         <div className="decision-grid">{summary.committees.map((item) => (
           <article className="decision-card" key={item.committee.id}>
-            <div><strong>{item.committee.name}</strong><span>{item.completedCount} de {item.assignmentCount} evaluaciones</span></div>
+            <div className="decision-card-heading"><strong>{item.committee.name}</strong><span className={item.completedCount === item.assignmentCount ? "decision-ready" : "decision-pending"}>{item.completedCount} de {item.assignmentCount} evaluaciones</span></div>
             <p>Recomendaciones: {item.recommendations.join(", ").replaceAll("_", " ") || "Pendientes"}</p>
             {item.decision && <span className="status-pill">Dictamen: {item.decision.decision.replaceAll("_", " ")}</span>}
-            {isManager && <form onSubmit={(event) => saveDecision(event, item.committee.id)}>
-              <select name="decision" required defaultValue={item.decision?.decision ?? ""}><option value="" disabled>Selecciona el dictamen</option><option value="APROBADA">Aprobada</option><option value="CON_CORRECCIONES">Con correcciones</option><option value="RECHAZADA">Rechazada</option></select>
-              <textarea name="observations" rows="3" defaultValue={item.decision?.observations ?? ""} placeholder="Fundamento u observaciones" />
-              <button className="outline-button" disabled={item.completedCount !== item.assignmentCount}>Guardar dictamen</button>
-            </form>}
+            {isManager && item.completedCount === item.assignmentCount ? (
+              <form onSubmit={(event) => saveDecision(event, item.committee.id)}>
+                <label className="decision-field">Dictamen
+                  <select name="decision" required defaultValue={item.decision?.decision ?? ""}><option value="" disabled>Selecciona el dictamen</option><option value="APROBADA">Aprobada</option><option value="CON_CORRECCIONES">Con correcciones</option><option value="RECHAZADA">Rechazada</option></select>
+                </label>
+                <label className="decision-field">Fundamento
+                  <textarea name="observations" rows="3" defaultValue={item.decision?.observations ?? ""} placeholder="Escribe el fundamento del comité" />
+                </label>
+                <button className="outline-button">Guardar dictamen</button>
+              </form>
+            ) : isManager ? (
+              <p className="decision-waiting">El comité podrá emitir su dictamen cuando complete todas sus evaluaciones.</p>
+            ) : null}
           </article>
         ))}</div>
-        {isManager && <div className="authorization-action"><div><strong>Autorización final</strong><p>{summary.allCommitteesApproved ? "Todos los comités emitieron un dictamen favorable." : "Se requieren dictámenes favorables de todos los comités."}</p></div><button type="button" className="primary-button" disabled={!summary.canAuthorize} onClick={authorize}>Autorizar investigación</button></div>}
+        {isManager && <div className={`authorization-action ${summary.canAuthorize ? "is-ready" : "is-blocked"}`}><div><strong>{summary.canAuthorize ? "Expediente listo para autorización" : "Autorización final"}</strong><p>{summary.canAuthorize ? "Todos los comités emitieron un dictamen favorable y existe un PDF vigente." : pendingEvaluations ? `Faltan ${pendingEvaluations} evaluación(es) por completar.` : pendingDecisions ? `Faltan ${pendingDecisions} dictamen(es) por registrar.` : "Se requieren dictámenes favorables de todos los comités."}</p></div><button type="button" className="primary-button" disabled={!summary.canAuthorize} onClick={authorize}>{summary.canAuthorize ? "Autorizar investigación" : "Esperando requisitos"}</button></div>}
         <div className="history-list"><h3>Historial del expediente</h3>{history.map((item) => <div key={item.id}><span>{researchStateLabels[item.previousState] ?? item.previousState ?? "Inicio"} → {researchStateLabels[item.nextState] ?? item.nextState}</span><small>{item.changedByName} · {new Date(item.createdAt).toLocaleString("es-MX")}</small><p>{item.reason}</p></div>)}</div>
       </>}
     </section>
@@ -1968,7 +2399,7 @@ function PublicationWorkspace({ session, investigations, refreshInvestigations, 
   }
   return (
     <section className="publication-workspace">
-      <div className="workspace-header"><div><p className="section-label">Sprint 7</p><h2>Publicación, consulta y reporte</h2><p>Difunde únicamente la versión autorizada y consulta indicadores institucionales.</p></div><span className="sprint-chip">Incremento funcional</span></div>
+      <div className="workspace-header"><div><p className="section-label">Difusión institucional</p><h2>Publicación, consulta y reporte</h2><p>Difunde únicamente la versión autorizada y consulta indicadores institucionales.</p></div><span className="sprint-chip">Información autorizada</span></div>
       {isManager && <div className="publish-queue"><h3>Investigaciones autorizadas</h3>{investigations.filter((item) => item.state === "APROBADA").length ? investigations.filter((item) => item.state === "APROBADA").map((item) => <div key={item.id}><span>#{item.id} — <strong>{item.title}</strong></span><button type="button" className="primary-button" onClick={() => publish(item.id)}>Publicar versión vigente</button></div>) : <p className="muted-message">No hay investigaciones pendientes de publicación.</p>}</div>}
       <form className="publication-search" onSubmit={(event) => { event.preventDefault(); load().catch((error) => setMessage(error.message)); }}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por título o resumen" /><button className="outline-button">Buscar</button></form>
       <div className="publication-grid">{items.map((item) => <article key={item.id}><p className="section-label">Publicación #{item.id}</p><h3>{item.research.title}</h3><p>{item.research.summary || "Sin resumen registrado."}</p><span>{item.research.area} · {item.research.category}</span><small>{item.research.investigator.name} · {new Date(item.publishedAt).toLocaleDateString("es-MX")}</small><button type="button" className="outline-button" onClick={() => download(`/publications/${item.id}/download`, session, item.document.originalName).catch((error) => setMessage(error.message))}>Descargar PDF publicado</button></article>)}</div>
@@ -1982,11 +2413,10 @@ function FutureModule({ title }) {
   return (
     <section className="future-module">
       <div>◌</div>
-      <p className="section-label">Planificado</p>
+      <p className="section-label">Módulo no disponible</p>
       <h2>{title}</h2>
       <p>
-        Este módulo corresponde a un Sprint posterior y todavía no forma parte
-        del incremento funcional.
+        Este módulo todavía no está habilitado para tu cuenta.
       </p>
     </section>
   );
@@ -2069,9 +2499,19 @@ function Dashboard({ session, onLogout }) {
               <p className="section-label">Sistema institucional</p>
               <h1>{titles[currentView][0]}</h1>
               <p className="page-subtitle">{titles[currentView][1]}</p>
+              <div className="breadcrumb" aria-label="Ruta de navegación">
+                <span>Inicio</span>
+                <span aria-hidden="true">›</span>
+                <strong>{titles[currentView][0]}</strong>
+              </div>
             </div>
           </div>
           <div className="user-menu">
+            <NotificationBell
+              session={session}
+              setMessage={setMessage}
+              onNavigate={setCurrentView}
+            />
             <div className="user-text">
               <strong>{user.name}</strong>
               <span>

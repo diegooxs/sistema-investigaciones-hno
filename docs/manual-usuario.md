@@ -14,13 +14,17 @@ Este perfil administra el proceso científico sin modificar cuentas generales. P
 
 ## 4. Investigador
 
-El Investigador registra y actualiza sus investigaciones, descarga los formatos de apoyo, carga anexos y el PDF principal, consulta versiones, envía el expediente, revisa observaciones, carga correcciones y consulta historial y notificaciones. No puede administrar usuarios, conocer la identidad individual de revisores ni autorizar su propio expediente.
+El Investigador registra y actualiza sus investigaciones, descarga los formatos de apoyo, carga anexos y el PDF principal, consulta versiones, revisa observaciones, carga correcciones y consulta historial y notificaciones. El expediente queda disponible para revisión cuando el Administrador Investigador abre una ronda. No puede administrar usuarios, conocer la identidad individual de revisores ni autorizar su propio expediente.
 
 ## 5. Integrante de comité
 
-El integrante consulta las asignaciones de su comité, revisa la documentación autorizada, registra puntajes con la rúbrica vigente, escribe observaciones y selecciona una recomendación. No puede modificar el expediente ni ejecutar la autorización institucional.
+El integrante consulta las asignaciones de su comité, abre los documentos PDF dentro del sistema o los descarga, registra puntajes con la rúbrica vigente, escribe observaciones y selecciona una recomendación. Solo puede consultar los expedientes que le fueron asignados. No puede modificar el expediente ni ejecutar la autorización institucional.
 
-## 6. Flujo de trabajo
+## 6. Notificaciones
+
+La campana del encabezado muestra las notificaciones de la cuenta activa y el número de mensajes sin leer. El sistema informa, entre otros eventos, cuando se asigna una nueva revisión, cuando se completa una evaluación, cuando se solicitan correcciones, cuando se registra un dictamen, cuando se autoriza una investigación y cuando se publica. Seleccione una notificación para ir al módulo de evaluación o márquela como leída. La pantalla actualiza la bandeja periódicamente y también permite marcar todas como leídas.
+
+## 7. Flujo de trabajo
 
 1. El Administrador registra las cuentas y roles.
 2. El Investigador crea un borrador y completa los datos del responsable.
@@ -31,12 +35,12 @@ El integrante consulta las asignaciones de su comité, revisa la documentación 
 7. El Administrador Investigador consulta el consolidado y registra el dictamen de cada comité.
 8. Cuando se cumplen las reglas, autoriza la investigación.
 9. Publica únicamente el PDF vigente autorizado.
-10. Los usuarios institucionales consultan la publicación y el personal autorizado revisa el reporte ejecutivo.
+10. Los perfiles autenticados con permiso consultan la publicación y el personal administrativo autorizado revisa el reporte ejecutivo. El prototipo no define un quinto rol independiente de “usuario institucional”.
 
-## 7. Archivos y versiones
+## 8. Archivos y versiones
 
 La investigación principal debe cargarse como PDF. Los anexos admiten PDF, DOC, DOCX, RTF u ODT. El sistema conserva versiones anteriores y marca una sola como vigente por tipo documental. Antes de cargar, verifique el nombre, el tipo y que el documento no contenga información ajena al expediente.
 
-## 8. Atención de incidencias
+## 9. Atención de incidencias
 
 Si aparece un error de conexión, informe al administrador y no repita cargas múltiples. Si la sesión venció, vuelva a iniciar sesión. Si se seleccionó un archivo incorrecto, cargue la versión correcta y comunique el incidente al responsable. Las fallas de MariaDB, respaldos y restauraciones deben atenderse únicamente con el manual técnico.

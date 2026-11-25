@@ -2,7 +2,7 @@ import mariadb from 'mariadb';
 import { config } from './config.js';
 
 export function createDatabasePool(overrides = {}) {
-  return mariadb.createPool({
+  const options = {
     host: config.db.host,
     port: config.db.port,
     database: config.db.name,
@@ -12,7 +12,9 @@ export function createDatabasePool(overrides = {}) {
     bigIntAsNumber: true,
     insertIdAsNumber: true,
     ...overrides
-  });
+  };
+  if (config.db.ssl && options.ssl === undefined) options.ssl = true;
+  return mariadb.createPool(options);
 }
 
 export async function closeDatabasePool(pool) {
