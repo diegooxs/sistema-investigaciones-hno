@@ -2301,7 +2301,9 @@ function NotificationBell({ session, setMessage, onNavigate }) {
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       >
-        <span aria-hidden="true">🔔</span>
+        <svg className="notification-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none">
+          <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
         {unread > 0 && <b>{unread > 99 ? "99+" : unread}</b>}
       </button>
       {open && (

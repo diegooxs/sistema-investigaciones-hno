@@ -2627,6 +2627,11 @@ select:focus-visible {
   border-color: #d9b6c2;
   background: #fbf3f6;
 }
+.notification-icon {
+  width: 19px;
+  height: 19px;
+  display: block;
+}
 .notification-bell-button b {
   position: absolute;
   top: -5px;
